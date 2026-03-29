@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Learn Hindi - Adaptive Spaced Repetition</title>
+    <title>Learn Hindi - Advanced Spaced Repetition</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700&family=Poppins:wght@400;500;600;700&display=swap');
 
@@ -17,6 +17,7 @@
             --success: #4caf50;
             --error: #f44336;
             --gold: #ffc107;
+            --blue: #2196f3;
         }
 
         body {
@@ -173,12 +174,10 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
 
-        .badge-new {
+        .badge {
             position: absolute;
             top: -12px;
             right: -12px;
-            background: var(--gold);
-            color: #000;
             font-size: 0.75rem;
             font-weight: 700;
             padding: 4px 10px;
@@ -186,6 +185,8 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.15);
             z-index: 10;
         }
+        .badge-new { background: var(--gold); color: #000; }
+        .badge-review { background: var(--blue); color: #fff; }
 
         .box-hindi {
             font-family: 'Noto Sans Devanagari', sans-serif;
@@ -350,7 +351,12 @@
         };
 
         // --- GLOBAL STATE ---
-        let charStats = {};
+        // We use a V2 storage key to start fresh with the new complex data structures
+        let appData = {
+            charStats: {},
+            unlockedLimits: { basic: 0, vowels: 0, diacritics: 0, consonants: 0 }
+        };
+        
         let currentMode = 'basic';
         let currentList = datasets[currentMode];
         let wordIndex = 0;
@@ -361,7 +367,6 @@
         let debounceTimer = null;
         let reviewAutoAdvanceTimer = null;
 
-        // DOM Elements
         const trackerEl = document.getElementById('tracker');
         const progressEl = document.getElementById('progress-text');
         const mainWordEl = document.getElementById('main-word');
@@ -372,21 +377,21 @@
 
         // --- LOCAL STORAGE & STATS ---
         function initStats() {
-            const savedData = localStorage.getItem('hindiCharStats');
+            const savedData = localStorage.getItem('hindiAppStatsV2');
             if (savedData) {
                 try {
-                    charStats = JSON.parse(savedData);
+                    appData = JSON.parse(savedData);
                 } catch (e) {
-                    console.error("Failed to parse local storage data", e);
+                    console.error("Failed to parse local storage", e);
                 }
             }
 
-            // Ensure all characters across all datasets exist in our stats object
+            // Ensure schema integrity
             Object.values(datasets).forEach(list => {
                 list.forEach(w => {
                     w.letters.forEach(l => {
-                        if(!charStats[l.char]) {
-                            charStats[l.char] = { score: 10, seenCount: 0, lastSeen: 0 };
+                        if(!appData.charStats[l.char]) {
+                            appData.charStats[l.char] = { score: 10, seenCount: 0, lastSeen: 0 };
                         }
                     });
                 });
@@ -396,9 +401,9 @@
 
         function saveStats() {
             try {
-                localStorage.setItem('hindiCharStats', JSON.stringify(charStats));
+                localStorage.setItem('hindiAppStatsV2', JSON.stringify(appData));
             } catch (e) {
-                console.warn("Local storage quota exceeded or unavailable.", e);
+                console.warn("Storage unavailable.", e);
             }
         }
 
@@ -411,41 +416,61 @@
                 const span = document.createElement('span');
                 span.className = 'tracker-char';
                 span.innerText = char;
-                const score = charStats[char].score;
+                const score = appData.charStats[char].score;
                 span.style.opacity = Math.max(0.1, score / 100);
                 trackerEl.appendChild(span);
             });
         }
 
-        // --- SPACED REPETITION ENGINE ---
+        // --- ADVANCED SPACED REPETITION ENGINE ---
         function getNextWordIndex() {
-            const now = Date.now();
+            const unlockedMax = appData.unlockedLimits[currentMode] || 0;
+            const frontierWord = currentList[unlockedMax];
+            
+            // 1. Check if the "Frontier" (newest unlocked word) has been learned enough to unlock the next one.
+            // We require every letter in the word to have been seen at least 4 times (1 New, 2 Flips, 1 Quiz).
+            let isFrontierMastered = true;
+            frontierWord.letters.forEach(l => {
+                if (appData.charStats[l.char].seenCount < 4) {
+                    isFrontierMastered = false;
+                }
+            });
+
+            // 2. If it IS mastered, unlock the next word and show it immediately.
+            if (isFrontierMastered && unlockedMax < currentList.length - 1) {
+                appData.unlockedLimits[currentMode]++;
+                saveStats();
+                return appData.unlockedLimits[currentMode];
+            }
+
+            // If we only have 1 word unlocked, we have to show it.
+            if (unlockedMax === 0) return 0;
+
+            // 3. Interleaving Logic
+            // If the frontier word is NOT mastered, we want to drill it heavily (65% chance).
+            if (!isFrontierMastered && Math.random() < 0.65) {
+                return unlockedMax; 
+            }
+
+            // 4. Review Mode (35% chance, or 100% chance if frontier is mastered but we are out of new words)
+            // We pick from the pool of previously learned words (0 up to unlockedMax - 1)
             let bestIndex = 0;
             let maxUrgency = -1;
+            const reviewLimit = isFrontierMastered ? unlockedMax : unlockedMax - 1;
 
-            for (let i = 0; i < currentList.length; i++) {
-                // Don't repeat the exact same word twice in a row if possible
-                if (i === wordIndex && currentList.length > 1) continue; 
-
-                let wordUrgency = 0;
+            for (let i = 0; i <= reviewLimit; i++) {
+                // Try not to show the exact same word twice in a row during review
+                if (i === wordIndex && reviewLimit > 0) continue; 
                 
-                // A word's urgency is determined by its most urgently needed letter
+                let wordUrgency = 0;
                 currentList[i].letters.forEach(l => {
-                    const stats = charStats[l.char];
-                    let letterUrgency = 0;
+                    const stats = appData.charStats[l.char];
+                    const timeSinceMins = (Date.now() - stats.lastSeen) / 60000;
+                    // Lower score + longer unseen time = higher urgency
+                    let letterUrgency = (100 - stats.score) + timeSinceMins;
+                    letterUrgency += Math.random() * 5; // Slight randomness to prevent strict loops
                     
-                    if (stats.seenCount === 0) {
-                        letterUrgency = 10000; // Unseen letters are always highest priority
-                    } else {
-                        // Formula: How low the score is + time since last seen
-                        // 1 point of urgency per minute elapsed since last seen
-                        const timeSinceMins = (now - stats.lastSeen) / 60000; 
-                        letterUrgency = (100 - stats.score) + timeSinceMins;
-                    }
-
-                    if (letterUrgency > wordUrgency) {
-                        wordUrgency = letterUrgency;
-                    }
+                    if (letterUrgency > wordUrgency) wordUrgency = letterUrgency;
                 });
 
                 if (wordUrgency > maxUrgency) {
@@ -456,7 +481,7 @@
             return bestIndex;
         }
 
-        // --- CORE LOGIC ---
+        // --- CORE UI LOGIC ---
         window.setMode = function(mode) {
             clearTimeout(reviewAutoAdvanceTimer);
             document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
@@ -468,7 +493,6 @@
             phase = 'letter';
             cardRevealed = false;
             
-            // Pick the best word for this specific level based on spaced repetition
             wordIndex = getNextWordIndex();
             
             updateTracker();
@@ -497,7 +521,11 @@
 
         function render() {
             const currentItem = currentList[wordIndex];
-            progressEl.innerText = `LEVEL ${currentMode === 'basic' ? 1 : currentMode === 'vowels' ? 2 : currentMode === 'diacritics' ? 3 : 4} • ADAPTIVE MODE`;
+            
+            // Determine UI label based on if it's the newest word or a review word
+            const isFrontier = wordIndex === appData.unlockedLimits[currentMode];
+            const typeLabel = isFrontier ? "LEARNING NEW WORD" : "REVIEWING WORD";
+            progressEl.innerText = `LEVEL ${currentMode === 'basic' ? 1 : currentMode === 'vowels' ? 2 : currentMode === 'diacritics' ? 3 : 4} • ${typeLabel}`;
             
             translationEl.classList.add('hidden');
             renderMainWord();
@@ -506,31 +534,32 @@
 
             if (phase === 'start') {
                 actionBtn.innerText = "Start Learning";
+                progressEl.innerText = "WELCOME";
                 mainWordEl.innerHTML = "<span class='word-char' data-roman='na'>न</span><span class='word-char' data-roman='ma'>म</span><span class='word-char' data-roman='ste'>स्ते</span>"; 
             }
             else if (phase === 'letter') {
                 const activeLetter = currentItem.letters[letterIndex];
-                const stats = charStats[activeLetter.char];
+                const stats = appData.charStats[activeLetter.char];
                 
-                // Determine learning mode based on how many times we've seen this character
+                // 0 times = New, 1-2 times = Flip, 3+ times = Quiz
                 const mode = stats.seenCount === 0 ? 'new' : (stats.seenCount < 3 ? 'flip' : 'quiz');
 
                 const box = document.createElement('div');
                 box.className = 'letter-box';
 
                 if (mode === 'new') {
-                    actionBtn.innerText = "Next Letter";
+                    actionBtn.innerText = "Got it";
                     actionBtn.style.display = "block";
                     hintText.innerText = "Press 'Enter' to continue";
                     box.innerHTML = `
-                        <div class="badge-new">NEW</div>
+                        <div class="badge badge-new">NEW</div>
                         <div class="box-hindi">${activeLetter.char}</div>
                         <div class="box-roman">${activeLetter.roman}</div>
                     `;
                 } 
                 else if (mode === 'flip') {
                     box.classList.add('clickable');
-                    actionBtn.innerText = cardRevealed ? "Next Letter" : "Reveal";
+                    actionBtn.innerText = cardRevealed ? "Next" : "Reveal";
                     actionBtn.style.display = cardRevealed ? "block" : "none";
                     hintText.innerText = cardRevealed ? "Press 'Enter' to continue" : "Press 'Enter' or click card to reveal";
 
@@ -539,6 +568,7 @@
                         box.onclick = () => { cardRevealed = true; render(); };
                     } else {
                         box.innerHTML = `
+                            ${!isFrontier ? '<div class="badge badge-review">REVIEW</div>' : ''}
                             <div class="box-hindi">${activeLetter.char}</div>
                             <div class="box-roman">${activeLetter.roman}</div>
                         `;
@@ -550,6 +580,7 @@
                     hintText.innerText = "Type the phonetic sound to advance";
                     
                     box.innerHTML = `
+                        ${!isFrontier ? '<div class="badge badge-review">QUIZ</div>' : ''}
                         <div class="box-hindi">${activeLetter.char}</div>
                         <input type="text" class="quiz-input" id="quiz-input" autocomplete="off" placeholder="...">
                     `;
@@ -588,18 +619,15 @@
                     breakdownEl.appendChild(box);
                 });
 
-                // Auto-advance logic (2 seconds)
                 reviewAutoAdvanceTimer = setTimeout(() => {
-                    if (phase === 'review') {
-                        advanceToNextWord();
-                    }
+                    if (phase === 'review') advanceToNextWord();
                 }, 2000);
             }
         }
 
         function handleAnswerResult(isCorrect, activeLetter, inputEl = null) {
-            let stats = charStats[activeLetter.char];
-            stats.lastSeen = Date.now(); // Mark as seen recently
+            let stats = appData.charStats[activeLetter.char];
+            stats.lastSeen = Date.now(); 
 
             if (isCorrect) {
                 stats.score = Math.min(100, stats.score + 30);
@@ -639,7 +667,7 @@
 
         function advanceToNextWord() {
             clearTimeout(reviewAutoAdvanceTimer);
-            wordIndex = getNextWordIndex(); // Ask algorithm for best next word
+            wordIndex = getNextWordIndex(); // Pick best next word via algorithm
             letterIndex = 0;
             phase = 'letter';
             render();
@@ -657,7 +685,7 @@
                 } 
                 else if (phase === 'letter') {
                     const activeLetter = currentItem.letters[letterIndex];
-                    const stats = charStats[activeLetter.char];
+                    const stats = appData.charStats[activeLetter.char];
                     const mode = stats.seenCount === 0 ? 'new' : (stats.seenCount < 3 ? 'flip' : 'quiz');
 
                     if (mode === 'new') {
@@ -695,7 +723,7 @@
                 render();
             } else if (phase === 'letter') {
                 const activeLetter = currentItem.letters[letterIndex];
-                if (charStats[activeLetter.char].seenCount === 0) {
+                if (appData.charStats[activeLetter.char].seenCount === 0) {
                     handleAnswerResult(true, activeLetter);
                 } else if (cardRevealed) {
                     handleAnswerResult(true, activeLetter);
@@ -707,7 +735,6 @@
 
         // Boot
         initStats();
-        // Don't auto-start adaptive logic until user clicks "Start Learning"
     </script>
 </body>
 </html>
