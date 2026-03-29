@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Learn Hindi - Advanced Spaced Repetition</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700&family=Poppins:wght@400;500;600;700&display=swap');
@@ -22,14 +22,16 @@
 
         body {
             margin: 0;
-            padding: 0;
+            padding: 20px 0 50px 0;
             font-family: 'Poppins', sans-serif;
             background-color: var(--bg-color);
             color: var(--text-dark);
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: flex-start; /* Prevents vertical collapsing when keyboard opens */
             min-height: 100vh;
+            box-sizing: border-box;
         }
 
         /* Top Tracker */
@@ -90,27 +92,30 @@
         .card {
             background: var(--card-bg);
             border-radius: 32px;
-            padding: 50px 40px;
-            width: 90%;
-            max-width: 500px;
+            padding: 50px 20px;
+            width: 95%;
+            max-width: 600px;
             box-shadow: 0 15px 35px rgba(216, 27, 96, 0.1);
             display: flex;
             flex-direction: column;
             align-items: center;
             position: relative;
             margin-bottom: 40px;
-            min-height: 380px;
+            min-height: 400px;
+            scroll-margin-top: 20px; /* Gives breathing room when auto-scrolled */
         }
 
         /* Massive Devanagari Word & Tooltips */
         .main-word {
             font-family: 'Noto Sans Devanagari', sans-serif;
-            font-size: 7rem;
+            font-size: 6rem;
             font-weight: 700;
             line-height: 1;
             margin-bottom: 40px;
             display: flex;
             justify-content: center;
+            text-align: center;
+            flex-wrap: wrap;
         }
         
         .word-char {
@@ -148,7 +153,7 @@
         /* Breakdown Boxes */
         .breakdown-area {
             display: flex;
-            gap: 20px;
+            gap: 15px;
             min-height: 140px;
             justify-content: center;
             align-items: center;
@@ -192,8 +197,8 @@
             font-family: 'Noto Sans Devanagari', sans-serif;
             font-size: 3rem;
             font-weight: 700;
-            color: var(--accent-pink);
             line-height: 1.2;
+            transition: color 0.3s;
         }
         .box-roman {
             font-size: 1.2rem;
@@ -284,7 +289,7 @@
 
     <div class="progress-text" id="progress-text">SELECTING NEXT WORD...</div>
 
-    <div class="card">
+    <div class="card" id="main-card">
         <div class="main-word" id="main-word"></div>
         <div class="breakdown-area" id="breakdown-area"></div>
         <div class="translation hidden" id="translation"></div>
@@ -297,7 +302,8 @@
         // --- DATA ---
         const datasets = {
             basic: [
-                { word: "कल", letters: [{char: "क", roman: "ka"}, {char: "ल", roman: "la"}], roman: "kal", english: "Tomorrow / Yesterday" },
+                { word: "न", letters: [{char: "न", roman: "na"}], roman: "na", english: "No / Not" },
+                { word: "कल", letters: [{char: "क", roman: "ka"}, {char: "ल", roman: "la"}], roman: "kal", english: "Tomorrow" },
                 { word: "खत", letters: [{char: "ख", roman: "kha"}, {char: "त", roman: "ta"}], roman: "khat", english: "Letter" },
                 { word: "गज", letters: [{char: "ग", roman: "ga"}, {char: "ज", roman: "ja"}], roman: "gaj", english: "Elephant" },
                 { word: "घर", letters: [{char: "घ", roman: "gha"}, {char: "र", roman: "ra"}], roman: "ghar", english: "House" },
@@ -314,8 +320,8 @@
                 { word: "हल", letters: [{char: "ह", roman: "ha"}, {char: "ल", roman: "la"}], roman: "hal", english: "Plow" }
             ],
             vowels: [
+                { word: "आ", letters: [{char: "आ", roman: "aa"}], roman: "aa", english: "Come (Command)" },
                 { word: "अ", letters: [{char: "अ", roman: "a"}], roman: "a", english: "Short A" },
-                { word: "आ", letters: [{char: "आ", roman: "aa"}], roman: "aa", english: "Long A" },
                 { word: "इ", letters: [{char: "इ", roman: "i"}], roman: "i", english: "Short I" },
                 { word: "ई", letters: [{char: "ई", roman: "ee"}], roman: "ee", english: "Long I" },
                 { word: "उ", letters: [{char: "उ", roman: "u"}], roman: "u", english: "Short U" },
@@ -338,11 +344,15 @@
                 { word: "कौ", letters: [{char: "कौ", roman: "kau"}], roman: "kau", english: "AU sound" }
             ],
             consonants: [
+                { word: "जा", letters: [{char: "जा", roman: "jaa"}], roman: "jaa", english: "Go" },
+                { word: "खा", letters: [{char: "खा", roman: "khaa"}], roman: "khaa", english: "Eat" },
+                { word: "पी", letters: [{char: "पी", roman: "pee"}], roman: "pee", english: "Drink" },
+                { word: "लो", letters: [{char: "लो", roman: "lo"}], roman: "lo", english: "Take" },
                 { word: "काम", letters: [{char: "का", roman: "kaa"}, {char: "म", roman: "ma"}], roman: "kaam", english: "Work" },
                 { word: "चाय", letters: [{char: "चा", roman: "chaa"}, {char: "य", roman: "ya"}], roman: "chaay", english: "Tea" },
                 { word: "झील", letters: [{char: "झी", roman: "jhee"}, {char: "ल", roman: "la"}], roman: "jheel", english: "Lake" },
                 { word: "टोपी", letters: [{char: "टो", roman: "to"}, {char: "पी", roman: "pee"}], roman: "topee", english: "Hat" },
-                { word: "ठीक", letters: [{char: "ठी", roman: "thee"}, {char: "क", roman: "ka"}], roman: "theek", english: "Okay / Fine" },
+                { word: "ठीक", letters: [{char: "ठी", roman: "thee"}, {char: "क", roman: "ka"}], roman: "theek", english: "Okay" },
                 { word: "धूप", letters: [{char: "धू", roman: "dhoo"}, {char: "प", roman: "pa"}], roman: "dhoop", english: "Sunlight" },
                 { word: "पानी", letters: [{char: "पा", roman: "paa"}, {char: "नी", roman: "nee"}], roman: "paanee", english: "Water" },
                 { word: "शेर", letters: [{char: "शे", roman: "she"}, {char: "र", roman: "ra"}], roman: "sher", english: "Lion" },
@@ -351,7 +361,6 @@
         };
 
         // --- GLOBAL STATE ---
-        // We use a V2 storage key to start fresh with the new complex data structures
         let appData = {
             charStats: {},
             unlockedLimits: { basic: 0, vowels: 0, diacritics: 0, consonants: 0 }
@@ -377,7 +386,7 @@
 
         // --- LOCAL STORAGE & STATS ---
         function initStats() {
-            const savedData = localStorage.getItem('hindiAppStatsV2');
+            const savedData = localStorage.getItem('hindiAppStatsV3');
             if (savedData) {
                 try {
                     appData = JSON.parse(savedData);
@@ -401,7 +410,7 @@
 
         function saveStats() {
             try {
-                localStorage.setItem('hindiAppStatsV2', JSON.stringify(appData));
+                localStorage.setItem('hindiAppStatsV3', JSON.stringify(appData));
             } catch (e) {
                 console.warn("Storage unavailable.", e);
             }
@@ -427,8 +436,6 @@
             const unlockedMax = appData.unlockedLimits[currentMode] || 0;
             const frontierWord = currentList[unlockedMax];
             
-            // 1. Check if the "Frontier" (newest unlocked word) has been learned enough to unlock the next one.
-            // We require every letter in the word to have been seen at least 4 times (1 New, 2 Flips, 1 Quiz).
             let isFrontierMastered = true;
             frontierWord.letters.forEach(l => {
                 if (appData.charStats[l.char].seenCount < 4) {
@@ -436,39 +443,31 @@
                 }
             });
 
-            // 2. If it IS mastered, unlock the next word and show it immediately.
             if (isFrontierMastered && unlockedMax < currentList.length - 1) {
                 appData.unlockedLimits[currentMode]++;
                 saveStats();
                 return appData.unlockedLimits[currentMode];
             }
 
-            // If we only have 1 word unlocked, we have to show it.
             if (unlockedMax === 0) return 0;
 
-            // 3. Interleaving Logic
-            // If the frontier word is NOT mastered, we want to drill it heavily (65% chance).
             if (!isFrontierMastered && Math.random() < 0.65) {
                 return unlockedMax; 
             }
 
-            // 4. Review Mode (35% chance, or 100% chance if frontier is mastered but we are out of new words)
-            // We pick from the pool of previously learned words (0 up to unlockedMax - 1)
             let bestIndex = 0;
             let maxUrgency = -1;
             const reviewLimit = isFrontierMastered ? unlockedMax : unlockedMax - 1;
 
             for (let i = 0; i <= reviewLimit; i++) {
-                // Try not to show the exact same word twice in a row during review
                 if (i === wordIndex && reviewLimit > 0) continue; 
                 
                 let wordUrgency = 0;
                 currentList[i].letters.forEach(l => {
                     const stats = appData.charStats[l.char];
                     const timeSinceMins = (Date.now() - stats.lastSeen) / 60000;
-                    // Lower score + longer unseen time = higher urgency
                     let letterUrgency = (100 - stats.score) + timeSinceMins;
-                    letterUrgency += Math.random() * 5; // Slight randomness to prevent strict loops
+                    letterUrgency += Math.random() * 5;
                     
                     if (letterUrgency > wordUrgency) wordUrgency = letterUrgency;
                 });
@@ -521,8 +520,6 @@
 
         function render() {
             const currentItem = currentList[wordIndex];
-            
-            // Determine UI label based on if it's the newest word or a review word
             const isFrontier = wordIndex === appData.unlockedLimits[currentMode];
             const typeLabel = isFrontier ? "LEARNING NEW WORD" : "REVIEWING WORD";
             progressEl.innerText = `LEVEL ${currentMode === 'basic' ? 1 : currentMode === 'vowels' ? 2 : currentMode === 'diacritics' ? 3 : 4} • ${typeLabel}`;
@@ -538,70 +535,91 @@
                 mainWordEl.innerHTML = "<span class='word-char' data-roman='na'>न</span><span class='word-char' data-roman='ma'>म</span><span class='word-char' data-roman='ste'>स्ते</span>"; 
             }
             else if (phase === 'letter') {
-                const activeLetter = currentItem.letters[letterIndex];
-                const stats = appData.charStats[activeLetter.char];
-                
-                // 0 times = New, 1-2 times = Flip, 3+ times = Quiz
-                const mode = stats.seenCount === 0 ? 'new' : (stats.seenCount < 3 ? 'flip' : 'quiz');
+                // Loop to display all cards side-by-side
+                currentItem.letters.forEach((l, idx) => {
+                    const box = document.createElement('div');
+                    box.className = 'letter-box';
 
-                const box = document.createElement('div');
-                box.className = 'letter-box';
-
-                if (mode === 'new') {
-                    actionBtn.innerText = "Got it";
-                    actionBtn.style.display = "block";
-                    hintText.innerText = "Press 'Enter' to continue";
-                    box.innerHTML = `
-                        <div class="badge badge-new">NEW</div>
-                        <div class="box-hindi">${activeLetter.char}</div>
-                        <div class="box-roman">${activeLetter.roman}</div>
-                    `;
-                } 
-                else if (mode === 'flip') {
-                    box.classList.add('clickable');
-                    actionBtn.innerText = cardRevealed ? "Next" : "Reveal";
-                    actionBtn.style.display = cardRevealed ? "block" : "none";
-                    hintText.innerText = cardRevealed ? "Press 'Enter' to continue" : "Press 'Enter' or click card to reveal";
-
-                    if (!cardRevealed) {
-                        box.innerHTML = `<div class="box-question">?</div>`;
-                        box.onclick = () => { cardRevealed = true; render(); };
-                    } else {
+                    if (idx < letterIndex) {
+                        // PAST LETTERS - Solid Black
                         box.innerHTML = `
-                            ${!isFrontier ? '<div class="badge badge-review">REVIEW</div>' : ''}
-                            <div class="box-hindi">${activeLetter.char}</div>
-                            <div class="box-roman">${activeLetter.roman}</div>
+                            <div class="box-hindi" style="color: var(--text-dark);">${l.char}</div>
+                            <div class="box-roman">${l.roman}</div>
                         `;
-                        box.onclick = () => handleAnswerResult(true, activeLetter);
-                    }
-                } 
-                else if (mode === 'quiz') {
-                    actionBtn.style.display = "none"; 
-                    hintText.innerText = "Type the phonetic sound to advance";
-                    
-                    box.innerHTML = `
-                        ${!isFrontier ? '<div class="badge badge-review">QUIZ</div>' : ''}
-                        <div class="box-hindi">${activeLetter.char}</div>
-                        <input type="text" class="quiz-input" id="quiz-input" autocomplete="off" placeholder="...">
-                    `;
-                    
-                    setTimeout(() => {
-                        const input = document.getElementById('quiz-input');
-                        if(input) {
-                            input.focus();
-                            input.addEventListener('input', (e) => {
-                                clearTimeout(debounceTimer);
-                                if (input.value.trim().toLowerCase() === activeLetter.roman.toLowerCase()) {
-                                    debounceTimer = setTimeout(() => {
-                                        handleAnswerResult(true, activeLetter, input);
-                                    }, 500);
+                    } 
+                    else if (idx === letterIndex) {
+                        // ACTIVE LETTER - Pink, Interactive
+                        const stats = appData.charStats[l.char];
+                        const mode = stats.seenCount === 0 ? 'new' : (stats.seenCount < 3 ? 'flip' : 'quiz');
+
+                        if (mode === 'new') {
+                            actionBtn.innerText = "Got it";
+                            actionBtn.style.display = "block";
+                            hintText.innerText = "Press 'Enter' to continue";
+                            box.innerHTML = `
+                                <div class="badge badge-new">NEW</div>
+                                <div class="box-hindi" style="color: var(--accent-pink);">${l.char}</div>
+                                <div class="box-roman">${l.roman}</div>
+                            `;
+                        } 
+                        else if (mode === 'flip') {
+                            box.classList.add('clickable');
+                            actionBtn.innerText = cardRevealed ? "Next" : "Reveal";
+                            actionBtn.style.display = cardRevealed ? "block" : "none";
+                            hintText.innerText = cardRevealed ? "Press 'Enter' to continue" : "Press 'Enter' or click card to reveal";
+
+                            if (!cardRevealed) {
+                                box.innerHTML = `<div class="box-question">?</div>`;
+                                box.onclick = () => { cardRevealed = true; render(); };
+                            } else {
+                                box.innerHTML = `
+                                    ${!isFrontier ? '<div class="badge badge-review">REVIEW</div>' : ''}
+                                    <div class="box-hindi" style="color: var(--accent-pink);">${l.char}</div>
+                                    <div class="box-roman">${l.roman}</div>
+                                `;
+                                box.onclick = () => handleAnswerResult(true, l);
+                            }
+                        } 
+                        else if (mode === 'quiz') {
+                            actionBtn.style.display = "none"; 
+                            hintText.innerText = "Type the phonetic sound to advance";
+                            box.innerHTML = `
+                                ${!isFrontier ? '<div class="badge badge-review">QUIZ</div>' : ''}
+                                <div class="box-hindi" style="color: var(--accent-pink);">${l.char}</div>
+                                <input type="text" class="quiz-input" id="quiz-input" autocomplete="off" placeholder="...">
+                            `;
+                            
+                            // Input Focus & Auto-scroll logic
+                            setTimeout(() => {
+                                const input = document.getElementById('quiz-input');
+                                if(input) {
+                                    // Smoothly lock the card to the top of the viewport on mobile to prevent shifts
+                                    input.addEventListener('focus', () => {
+                                        document.getElementById('main-card').scrollIntoView({ behavior: "smooth", block: "start" });
+                                    });
+                                    input.focus();
+                                    
+                                    input.addEventListener('input', (e) => {
+                                        clearTimeout(debounceTimer);
+                                        if (input.value.trim().toLowerCase() === l.roman.toLowerCase()) {
+                                            debounceTimer = setTimeout(() => {
+                                                handleAnswerResult(true, l, input);
+                                            }, 500);
+                                        }
+                                    });
                                 }
-                            });
+                            }, 50);
                         }
-                    }, 0);
-                }
-                
-                breakdownEl.appendChild(box);
+                    } 
+                    else {
+                        // UPCOMING LETTERS - Faded Grey
+                        box.innerHTML = `
+                            <div class="box-hindi" style="color: var(--text-grey); opacity: 0.3;">${l.char}</div>
+                        `;
+                    }
+                    
+                    breakdownEl.appendChild(box);
+                });
             }
             else if (phase === 'review') {
                 actionBtn.style.display = "none";
@@ -613,7 +631,7 @@
                     const box = document.createElement('div');
                     box.className = 'letter-box';
                     box.innerHTML = `
-                        <div class="box-hindi">${l.char}</div>
+                        <div class="box-hindi" style="color: var(--text-dark);">${l.char}</div>
                         <div class="box-roman">${l.roman}</div>
                     `;
                     breakdownEl.appendChild(box);
@@ -650,7 +668,7 @@
                 }, inputEl ? 400 : 0);
             } else {
                 stats.score = Math.max(10, stats.score - 20);
-                stats.seenCount = 1; // Demote back to flip card phase
+                stats.seenCount = 1; 
                 saveStats();
                 updateTracker();
 
@@ -667,7 +685,7 @@
 
         function advanceToNextWord() {
             clearTimeout(reviewAutoAdvanceTimer);
-            wordIndex = getNextWordIndex(); // Pick best next word via algorithm
+            wordIndex = getNextWordIndex(); 
             letterIndex = 0;
             phase = 'letter';
             render();
